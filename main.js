@@ -1,5 +1,6 @@
 // Main JavaScript file for DeepTrip
 
+// 页面加载完成后初始化功能
 document.addEventListener('DOMContentLoaded', function() {
     // Determine which page we're on
     const body = document.body;
@@ -19,19 +20,19 @@ document.addEventListener('DOMContentLoaded', function() {
     initCursorParticleEffect();
     
     // Initialize the appropriate page based on the body class
-    if (currentPage === 'home') {
+    if (body.classList.contains('home')) {
         console.log('Initializing home page');
         initHomePage();
-    } else if (currentPage === 'create') {
+    } else if (body.classList.contains('create-page')) {
         console.log('Initializing create page');
         initCreatePage();
-    } else if (currentPage === 'explore-page' || body.classList.contains('explore-page')) {
+    } else if (body.classList.contains('explore-page')) {
         console.log('Initializing explore page');
         initExplorePage();
-    } else if (currentPage === 'plans') {
+    } else if (body.classList.contains('plans-page')) {
         console.log('Initializing plans page');
         initPlansPage();
-    } else if (currentPage === 'personal-page' || body.classList.contains('personal-page')) {
+    } else if (body.classList.contains('personal-page')) {
         console.log('Initializing personal page');
         initPersonalPage();
     } else {
@@ -45,7 +46,9 @@ document.addEventListener('DOMContentLoaded', function() {
     updateBackgroundBasedOnTime();
     
     // Debug element presence
-    debugElementPresence();
+    if (typeof debugElementPresence === 'function') {
+        debugElementPresence();
+    }
 });
 
 // Debug function to check if key elements exist
@@ -290,6 +293,7 @@ function updateBackgroundBasedOnTime() {
 // Create page functionality
 function initCreatePage() {
     if (!document.body.classList.contains('create-page')) {
+        console.log("Not on create page, skipping initCreatePage");
         return; // Only run on the create page
     }
     
@@ -298,10 +302,32 @@ function initCreatePage() {
     // Core variables
     let currentQuestion = 1;
     const totalQuestions = 8;
-    const answers = {};
+    window.answers = {}; // 将answers设为全局变量以便在showQuestion中访问
+    let hasSelectedDestination = false; // 新增: 跟踪用户是否选择了具体目的地
+    let userDestination = ""; // 新增: 存储用户输入的目的地
+    let isTransitioning = false; // 添加过渡状态控制变量
     
     // Page elements
     const welcomeScreen = document.querySelector('.welcome-screen');
+    console.log("Welcome screen element found:", !!welcomeScreen);
+    
+    // 新增: 模式选择相关元素
+    const modeSelectionStep = document.querySelector('.mode-selection-step');
+    const questionnaireMode = document.getElementById('questionnaire-mode');
+    const quickMode = document.getElementById('quick-mode');
+    
+    const destinationSelectionStep = document.querySelector('.destination-selection-step');
+    console.log("Destination selection step element found:", !!destinationSelectionStep);
+    
+    // 新增: 快速模式相关元素
+    const quickModeStep = document.querySelector('.quick-mode-step');
+    const quickDestination = document.getElementById('quick-destination');
+    const quickTravelDays = document.getElementById('quick-travel-days');
+    const quickTravelStyle = document.getElementById('quick-travel-style');
+    const quickBudget = document.getElementById('quick-budget');
+    const quickModeBack = document.getElementById('quick-mode-back');
+    const quickModeSubmit = document.getElementById('quick-mode-submit');
+    
     const content = document.querySelector('.content');
     const body = document.body;
     const fullscreenBg = document.querySelector('.fullscreen-bg');
@@ -311,47 +337,258 @@ function initCreatePage() {
     const resultsContainer = document.querySelector('.results-container');
     const loadingAnimation = document.querySelector('.loading-animation');
     
-    // 点击进入按钮
+    // 新增: 目的地选择相关元素
+    const hasDestinationBtn = document.getElementById('has-destination');
+    console.log("Has destination button found:", !!hasDestinationBtn);
+    
+    const noDestinationBtn = document.getElementById('no-destination');
+    console.log("No destination button found:", !!noDestinationBtn);
+    
+    const destinationInputContainer = document.querySelector('.destination-input-container');
+    console.log("Destination input container found:", !!destinationInputContainer);
+    
+    const destinationInput = document.getElementById('destination-input');
+    const destinationSubmitBtn = document.getElementById('destination-submit');
+    
+    // 点击进入按钮 - 从欢迎页面进入模式选择步骤
     const enterButton = document.getElementById('enter-questionnaire');
+    console.log("Enter button found:", !!enterButton);
+    
     if (enterButton) {
-        enterButton.addEventListener('click', completeTransition);
+        console.log("设置入口按钮点击事件");
+        enterButton.addEventListener('click', function() {
+            console.log("入口按钮被点击");
+            // 隐藏欢迎屏幕
+            welcomeScreen.classList.add('hidden');
+            // 显示模式选择步骤
+            modeSelectionStep.style.display = 'flex';
+        });
     }
     
     // 使整个欢迎界面可点击
     if (welcomeScreen) {
-        welcomeScreen.addEventListener('click', completeTransition);
+        welcomeScreen.addEventListener('click', function(e) {
+            // 如果点击的不是按钮本身，也触发相同效果
+            if (e.target !== enterButton) {
+                console.log("欢迎屏幕被点击");
+                welcomeScreen.classList.add('hidden');
+                modeSelectionStep.style.display = 'flex';
+            }
+        });
     }
     
-    // 保留原有的wheel事件处理（简化版，只处理必要的部分）
-    window.addEventListener('wheel', function(e) {
-        if (isTransitioning) return;
-        
-        // 只对向下滚动作出反应
-        if (e.deltaY > 0) {
+    // 模式选择按钮事件
+    if (questionnaireMode) {
+        questionnaireMode.addEventListener('click', function() {
+            console.log("问卷模式被选择");
+            modeSelectionStep.style.display = 'none';
+            destinationSelectionStep.style.display = 'flex';
+        });
+    }
+    
+    if (quickMode) {
+        quickMode.addEventListener('click', function() {
+            console.log("快速模式被选择");
+            modeSelectionStep.style.display = 'none';
+            quickModeStep.style.display = 'flex';
+        });
+    }
+    
+    // 快速模式返回按钮
+    if (quickModeBack) {
+        quickModeBack.addEventListener('click', function() {
+            quickModeStep.style.display = 'none';
+            modeSelectionStep.style.display = 'flex';
+        });
+    }
+    
+    // 快速模式提交按钮
+    if (quickModeSubmit) {
+        quickModeSubmit.addEventListener('click', function() {
+            const destination = quickDestination.value.trim();
+            const travelDays = quickTravelDays.value;
+            
+            if (!destination || !travelDays) {
+                // 验证必填字段
+                if (!destination) {
+                    quickDestination.style.borderColor = 'red';
+                    setTimeout(() => {
+                        quickDestination.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                    }, 800);
+                }
+                
+                if (!travelDays) {
+                    quickTravelDays.style.borderColor = 'red';
+                    setTimeout(() => {
+                        quickTravelDays.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                    }, 800);
+                }
+                
+                return;
+            }
+            
+            // 构建快速模式的answers对象
+            window.answers = {
+                specifiedDestination: destination,
+                isUncertainDestination: false,
+                duration: travelDays
+            };
+            
+            // 添加可选信息
+            if (quickTravelStyle.value) {
+                window.answers.style = quickTravelStyle.value;
+            }
+            
+            if (quickBudget.value) {
+                window.answers.budget = quickBudget.value;
+            }
+            
+            // 隐藏快速模式界面并显示加载动画
+            quickModeStep.style.display = 'none';
+            loadingAnimation.style.display = 'flex';
+            
+            // 显示加载消息
+            const loadingMessage = document.getElementById('loading-message');
+            if (loadingMessage) {
+                loadingMessage.innerHTML = `正在为您的${destination}之旅生成攻略，请稍候...`;
+            }
+            
+            // 直接生成结果，跳过问卷
+            setTimeout(() => {
+                console.log("快速模式生成结果", window.answers);
+                loadingAnimation.style.display = 'none';
+                
+                // 获取要创建结果的容器
+                const guideContainer = document.querySelector('.travel-guide-container');
+                const modal = document.querySelector('.travel-guide-modal');
+                const overlay = document.querySelector('.travel-guide-overlay');
+                
+                // 生成攻略并显示模态框
+                generateTravelGuide(window.answers, guideContainer);
+                
+                // 确保模态框和背景显示
+                if (modal && overlay) {
+                    modal.classList.add('active');
+                    overlay.classList.add('active');
+                }
+            }, 2000);
+        });
+    }
+    
+    // 新增: 目的地选择按钮事件
+    if (hasDestinationBtn) {
+        hasDestinationBtn.addEventListener('click', function() {
+            console.log("已确定目的地按钮被点击");
+            // 显示目的地输入框
+            destinationInputContainer.style.display = 'flex';
+            // 添加动画效果和样式
+            this.style.backgroundColor = 'rgba(255, 182, 245, 0.4)';
+            noDestinationBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        });
+    }
+    
+    if (noDestinationBtn) {
+        noDestinationBtn.addEventListener('click', function() {
+            console.log("不确定目的地按钮被点击");
+            // 正常流程，从第一题开始
+            hasSelectedDestination = false;
+            userDestination = "未指定目的地"; // 添加未指定目的地标记
+            
+            // 将此信息存储在answers中，以便在生成旅行攻略时使用
+            window.answers.isUncertainDestination = true;
+            window.answers.needsDestinationRecommendation = true;
+            
+            console.log("用户选择不确定目的地，设置 hasSelectedDestination =", hasSelectedDestination);
+            destinationSelectionStep.style.display = 'none';
             completeTransition();
+            // 添加动画效果和样式
+            this.style.backgroundColor = 'rgba(255, 182, 245, 0.4)';
+            hasDestinationBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+            
+            // 显示推荐目的地提示
+            const loadingMessage = document.getElementById('loading-message');
+            if (loadingMessage) {
+                loadingMessage.innerHTML = '我们将根据您的偏好为您推荐最适合的旅行目的地...';
+            }
+        });
+    }
+    
+    if (destinationSubmitBtn) {
+        destinationSubmitBtn.addEventListener('click', function() {
+            console.log("目的地提交按钮被点击");
+            const destination = destinationInput.value.trim();
+            if (destination) {
+                userDestination = destination;
+                hasSelectedDestination = true;
+                
+                // 将用户选择的目的地存储在answers中
+                window.answers.specifiedDestination = destination;
+                window.answers.isUncertainDestination = false;
+                
+                destinationSelectionStep.style.display = 'none';
+                completeTransition();
+            } else {
+                // 输入框闪烁提示
+                destinationInput.style.borderColor = 'red';
+                setTimeout(() => {
+                    destinationInput.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                }, 800);
+            }
+        });
+    }
+    
+    // 目的地输入框回车确认
+    if (destinationInput) {
+        destinationInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                destinationSubmitBtn.click();
+            }
+        });
+    }
+    
+    // 快速模式输入框回车确认
+    if (quickDestination) {
+        quickDestination.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && quickTravelDays.value) {
+                quickModeSubmit.click();
+            }
+        });
+    }
+    
+    // 保留原有的wheel事件处理，但只在欢迎屏幕阶段有效
+    window.addEventListener('wheel', function(e) {
+        // 只在欢迎屏幕可见时处理
+        if (welcomeScreen.style.display !== 'none' && !welcomeScreen.classList.contains('hidden')) {
+            // 只对向下滚动作出反应
+            if (e.deltaY > 0) {
+                console.log("检测到向下滚动");
+                welcomeScreen.classList.add('hidden');
+                modeSelectionStep.style.display = 'flex';
+            }
         }
     });
     
-    // 滚动变量
-    let isTransitioning = false;
-    
-    // 触控支持
+    // 触控支持，同样只在欢迎屏幕阶段有效
     let touchStartY = 0;
     let touchMoveY = 0;
-    let touchThreshold = 50; // 降低像素阈值，使触发更容易
+    let touchThreshold = 50;
     
     window.addEventListener('touchstart', function(e) {
         touchStartY = e.touches[0].clientY;
     });
     
     window.addEventListener('touchmove', function(e) {
-        if (isTransitioning) return;
-        touchMoveY = e.touches[0].clientY;
-        const touchDiff = touchStartY - touchMoveY;
-        
-        // 只对向下滑动反应
-        if (touchDiff > touchThreshold) {
-            completeTransition();
+        // 只在欢迎屏幕可见时处理
+        if (welcomeScreen.style.display !== 'none' && !welcomeScreen.classList.contains('hidden')) {
+            touchMoveY = e.touches[0].clientY;
+            const touchDiff = touchStartY - touchMoveY;
+            
+            // 只对向下滑动反应
+            if (touchDiff > touchThreshold) {
+                console.log("检测到向下滑动");
+                welcomeScreen.classList.add('hidden');
+                modeSelectionStep.style.display = 'flex';
+            }
         }
     });
     
@@ -361,11 +598,6 @@ function initCreatePage() {
         isTransitioning = true;
         
         console.log("Completing transition to questionnaire");
-        
-        // Hide welcome screen
-        if (welcomeScreen) {
-            welcomeScreen.classList.add('hidden');
-        }
         
         // Show content
         if (content) {
@@ -379,12 +611,34 @@ function initCreatePage() {
             body.style.height = 'auto';
             body.style.overflowY = 'auto';
             
-            // Show first question
+            // 如果用户选择了具体目的地，跳过前4个问题
+            if (hasSelectedDestination) {
+                console.log("User selected destination:", userDestination);
+                // 自动填充前4个问题的答案
+                window.answers["1"] = "specific_destination";
+                window.answers["2"] = "specific_destination";
+                window.answers["3"] = "specific_destination";
+                window.answers["4"] = "specific_destination";
+                // 从第5题开始
+                currentQuestion = 5;
+            }
+            
             showQuestion(currentQuestion);
             updateProgress(currentQuestion, totalQuestions);
             
             // Add click handlers for options
             setupQuestionOptions();
+            
+            // 如果有具体目的地，显示在页面上
+            if (hasSelectedDestination) {
+                const progressContainer = document.querySelector('.progress-container');
+                if (progressContainer) {
+                    const destinationDisplay = document.createElement('div');
+                    destinationDisplay.className = 'selected-destination-display';
+                    destinationDisplay.innerHTML = `<span>您选择的目的地: </span><strong>${userDestination}</strong>`;
+                    progressContainer.appendChild(destinationDisplay);
+                }
+            }
         }, 600);
     }
     
@@ -407,7 +661,7 @@ function initCreatePage() {
                 this.classList.remove('faded');
                 
                 // Store answer
-                answers[questionId] = selectedValue;
+                window.answers[questionId] = selectedValue;
                 
                 // Proceed to next question after delay
                 setTimeout(() => {
@@ -417,12 +671,85 @@ function initCreatePage() {
                         updateProgress(currentQuestion, totalQuestions);
                     } else {
                         // Show results when all questions answered
-                        showResults(answers);
+                        showResults(window.answers);
                     }
                 }, 500);
             });
         });
+        
+        // 添加返回上一题的功能
+        const prevButtons = document.querySelectorAll('.prev-button');
+        prevButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                // 第一题的返回按钮已禁用，无需处理
+                if (currentQuestion > 1) {
+                    currentQuestion--;
+                    showQuestion(currentQuestion);
+                    updateProgress(currentQuestion, totalQuestions);
+                    
+                    // 如果用户选择了具体目的地，且尝试返回到前4题，不允许
+                    if (hasSelectedDestination && currentQuestion < 5) {
+                        currentQuestion = 5;
+                        showQuestion(currentQuestion);
+                        updateProgress(currentQuestion, totalQuestions);
+                    }
+                }
+            });
+        });
+        
+        // 启用下一题按钮功能
+        const nextButtons = document.querySelectorAll('.next-button');
+        nextButtons.forEach(button => {
+            // 只处理当前可见问题的下一题按钮
+            const questionElement = button.closest('.question');
+            if (questionElement) {
+                const questionId = questionElement.dataset.questionId;
+                
+                // 当问题有选项被选中时，启用下一题按钮
+                questionElement.addEventListener('click', function(e) {
+                    if (e.target.closest('.question-option')) {
+                        button.disabled = false;
+                    }
+                });
+                
+                // 点击下一题按钮时的行为
+                button.addEventListener('click', function() {
+                    if (!this.disabled && currentQuestion < totalQuestions) {
+                        currentQuestion++;
+                        showQuestion(currentQuestion);
+                        updateProgress(currentQuestion, totalQuestions);
+                        
+                        // 如果用户选择了具体目的地，且尝试返回到前4题，不允许
+                        if (hasSelectedDestination && currentQuestion < 5) {
+                            currentQuestion = 5;
+                            showQuestion(currentQuestion);
+                            updateProgress(currentQuestion, totalQuestions);
+                        }
+                    } else if (!this.disabled && currentQuestion === totalQuestions) {
+                        // 最后一题，显示结果
+                        showResults(window.answers);
+                    }
+                });
+            }
+        });
     }
+
+    // 检查是否从explore页面带有目的地参数
+    const checkForSelectedDestination = () => {
+        const selectedDestination = sessionStorage.getItem('selectedDestination');
+        if (selectedDestination) {
+            userDestination = selectedDestination;
+            hasSelectedDestination = true;
+            welcomeScreen.classList.add('hidden');
+            // 跳过目的地选择步骤，直接进入问卷
+            completeTransition();
+            // 清除会话存储中的目的地
+            sessionStorage.removeItem('selectedDestination');
+        }
+    };
+    
+    // 页面初始化时检查
+    checkForSelectedDestination();
 }
 
 // Update progress bar
@@ -450,6 +777,49 @@ function showQuestion(questionNumber) {
     const targetQuestion = document.querySelector(`.question[data-question-id="${questionNumber}"]`);
     if (targetQuestion) {
         targetQuestion.classList.add('active');
+        
+        // 处理上一题/下一题按钮状态
+        const prevButton = targetQuestion.querySelector('.prev-button');
+        const nextButton = targetQuestion.querySelector('.next-button');
+        
+        // 第一题禁用上一题按钮
+        if (prevButton) {
+            prevButton.disabled = (questionNumber === 1);
+        }
+        
+        // 设置下一题按钮状态 - 检查是否有答案
+        if (nextButton) {
+            const questionId = targetQuestion.dataset.questionId;
+            
+            // 更新: 两种方式检查是否有答案 - window.answers或已选中选项
+            const hasAnswer = window.answers && window.answers[questionId];
+            const hasSelectedOption = targetQuestion.querySelector('.question-option.selected') !== null;
+            
+            nextButton.disabled = !(hasAnswer || hasSelectedOption);
+            
+            // 如果有已存储的答案，恢复选中状态
+            if (hasAnswer && !hasSelectedOption) {
+                const selectedOption = targetQuestion.querySelector(`.question-option[data-value="${window.answers[questionId]}"]`);
+                if (selectedOption) {
+                    // 清除其他选中状态
+                    targetQuestion.querySelectorAll('.question-option').forEach(opt => {
+                        opt.classList.remove('selected');
+                        opt.classList.add('faded');
+                    });
+                    
+                    // 应用选中样式
+                    selectedOption.classList.add('selected');
+                    selectedOption.classList.remove('faded');
+                }
+            }
+            
+            // 最后一题的下一步按钮文字改为"完成"
+            if (parseInt(questionId) === 8) {
+                nextButton.textContent = "完成";
+            } else {
+                nextButton.textContent = "下一题";
+            }
+        }
     }
 }
 
@@ -502,6 +872,11 @@ async function generateTravelGuide(answers, container) {
     }
 
     try {
+        // DEBUG: 输出用户选择的答案
+        console.log("DEBUG - 用户回答:", answers);
+        console.log("DEBUG - 答案1(地区):", answers[1]);
+        console.log("DEBUG - 答案类型:", typeof answers[1]);
+        
         // Format answers for display
         const formattedAnswers = {};
         for (const questionId in answers) {
@@ -509,7 +884,7 @@ async function generateTravelGuide(answers, container) {
         }
         
         // API parameters
-        const apiKey = 'sk-717e6d20ffce4e49b6746dc981a426c6';
+        const apiKey = 'sk-660d30ebb9184714be1a81faf9b1021e';
         const apiUrl = 'https://api.deepseek.com/v1/chat/completions';
         
         // Create a formatted prompt for the DeepSeek API
@@ -524,9 +899,44 @@ async function generateTravelGuide(answers, container) {
             `旅行人数: ${formattedAnswers[8] || '两人'}`
         ];
         
-        const prompt = createTravelPrompt(answers);
-
+        // 创建旅行提示，考虑是否需要推荐目的地
+        let prompt = createTravelPrompt(answers);
+        
+        // 检查是否需要目的地推荐（即用户选择了"不确定目的地"）
+        const needsDestinationRecommendation = answers.needsDestinationRecommendation || 
+                                              answers.isUncertainDestination || 
+                                              (answers[1] !== 'specific_destination' && !answers.specifiedDestination);
+        
+        if (needsDestinationRecommendation) {
+            console.log("需要目的地推荐");
+            // 确保提示中明确表明需要推荐目的地
+            prompt = prompt.replace('基于以下旅行偏好', `请根据以下旅行偏好推荐最适合的旅行目的地，并基于这些偏好`);
+            
+            // 添加额外指示以确保AI会推荐目的地
+            if (!prompt.includes('用户未指定具体目的地')) {
+                prompt += `\n\n请注意：用户未指定具体目的地，需要您根据上述旅行偏好推荐最合适的旅游目的地，并提供详细的旅行攻略。`;
+            }
+            
+            // 更新加载信息
+            const loadingMessage = document.getElementById('loading-message');
+            if (loadingMessage) {
+                loadingMessage.innerHTML = '我们正在为您分析最适合的旅行目的地并生成个性化攻略...';
+            }
+        } else if (answers.specifiedDestination) {
+            // 用户指定了目的地
+            console.log("用户指定的目的地:", answers.specifiedDestination);
+            // 确保提示中包含用户指定的目的地
+            prompt = prompt.replace('基于以下旅行偏好', `为目的地 ${answers.specifiedDestination} 基于以下旅行偏好`);
+            
+            // 更新加载信息
+            const loadingMessage = document.getElementById('loading-message');
+            if (loadingMessage) {
+                loadingMessage.innerHTML = `我们正在为您的${answers.specifiedDestination}之旅生成个性化攻略...`;
+            }
+        }
+        
         console.log("正在调用DeepSeek API生成旅行攻略...");
+        console.log("发送的提示:", prompt);
         
         let travelGuidesData = null;
         
@@ -594,16 +1004,19 @@ async function generateTravelGuide(answers, container) {
                 
                 container.innerHTML = previewHTML;
                 
-                // 添加按钮点击事件
+                // 添加查看详情按钮事件
                 const viewDetailsBtn = container.querySelector('.view-details-btn');
                 if (viewDetailsBtn) {
                     viewDetailsBtn.addEventListener('click', function() {
+                        // 显示旅行攻略详情
                         showTravelGuideDetails(parsedGuideData);
                     });
                 }
             }
-        } catch (error) {
-            console.error("API调用失败:", error);
+            
+            return parsedGuideData;
+        } catch (apiError) {
+            console.error('API调用失败:', apiError);
             
             // Get fallback travel guide
             const fallbackGuide = getFallbackTravelGuide();
@@ -639,6 +1052,8 @@ async function generateTravelGuide(answers, container) {
                     });
                 }
             }
+            
+            return fallbackGuide;
         }
     } catch (error) {
         console.error("生成旅行攻略时出错:", error);
@@ -916,21 +1331,52 @@ function createTravelPrompt(answers) {
     const travelStyle = getTextForValue(5, answers[5]);
     const duration = getTextForValue(6, answers[6]);
     const budget = getTextForValue(7, answers[7]);
-    const people = getTextForValue(8, answers[8] || 'couple');
+    const travelers = getTextForValue(8, answers[8]);
     
-    return `你是一名资深旅行规划专家，请根据用户提供的选择，生成一个完全匹配用户需求的私人订制旅行攻略。
+    // 确定是否为未确定目的地的请求
+    const isDestinationUnknown = answers[1] === 'specific_destination' ? false : true;
+    
+    // 基本提示开头
+    let promptStart = `请创建一个基于以下旅行偏好的个性化旅行攻略：`;
+    
+    // 如果用户未确定目的地，添加明确指示
+    if (isDestinationUnknown) {
+        promptStart = `请根据以下旅行偏好，为用户推荐最适合的旅游目的地，并创建详细的个性化旅行攻略：`;
+    }
+    
+    // 用户需求部分
+    let userRequirements = `
+# 用户偏好
+1. **地区**: ${region}
+2. **地理特征**: ${geography} 
+3. **气候类型**: ${climate}
+4. **城市规模**: ${cityType}
+5. **旅行风格**: ${travelStyle}
+6. **旅行时长**: ${duration}
+7. **预算水平**: ${budget}
+8. **旅伴情况**: ${travelers}`;
 
-# 用户需求
-- 地区：${region}
-- 地理特征：${geography}
-- 气候：${climate}
-- 城市类型：${cityType}
-- 旅行风格：${travelStyle}
-- 旅行时长：${duration}
-- 预算：${budget}
-- 旅行人数：${people}
+    // 对于未确定目的地的用户，添加特别说明
+    if (isDestinationUnknown) {
+        userRequirements += `
 
-# 生成要求
+# 特别说明
+- 用户没有指定具体目的地，需要您根据上述偏好推荐最适合的目的地
+- 请确保推荐的目的地与用户的所有偏好高度匹配
+- 在回复中明确说明推荐该目的地的理由
+- 优先考虑以下标准选择最佳目的地:
+  * 完全符合用户选择的地区范围
+  * 匹配用户喜欢的地理特征(海滩、山脉、城市或乡村)
+  * 适合用户偏好的气候类型
+  * 符合用户期望的城市规模
+  * 能够满足用户指定的旅行风格需求
+  * 适合用户计划的旅行时长
+  * 符合用户的预算水平
+  * 适合用户的旅伴情况`;
+    }
+    
+    // 构建生成要求部分
+    let generationRequirements = `\n# 生成要求
 1. **完全匹配用户偏好**：你生成的旅行攻略必须严格遵循所有用户选择的条件，不要生成多余的攻略
 2. **内容要素**：
    - 详细的目的地选择理由
@@ -951,14 +1397,18 @@ function createTravelPrompt(answers) {
     "dailyPlan": [
       {
         "day": 1,
-        "activities": "第一天活动主题",
+        "morning": "早晨活动",
+        "noon": "中午活动",
+        "evening": "晚上活动",
         "location": "地点",
         "description": "详细描述，包括景点、体验和特色",
         "budget": "预算估计"
       },
       {
         "day": 2,
-        "activities": "第二天活动主题",
+        "morning": "早晨活动",
+        "noon": "中午活动",
+        "evening": "晚上活动",
         "location": "地点",
         "description": "详细描述",
         "budget": "预算估计"
@@ -971,123 +1421,162 @@ function createTravelPrompt(answers) {
 }
 
 请确保响应为纯JSON格式。dailyPlan数组中的天数应根据用户选择的旅行时长进行相应调整。每项建议必须完全匹配用户的选择，不要提供一个固定模板，应该是完全个性化的推荐。`;
+
+    return `${promptStart}\n${userRequirements}\n${generationRequirements}`;
 }
 
 // Parse the AI response into a structured travel guide (legacy function kept for compatibility)
 function parseAIResponseToTravelGuide(response, answers) {
     try {
-        // Try to extract JSON from the response
+        console.log('解析AI回应:', response);
+        
+        // 尝试解析JSON格式数据
+        let responseData;
+        try {
+            // 尝试直接解析完整响应
+            responseData = JSON.parse(response);
+            console.log('成功解析JSON格式数据:', responseData);
+            
+            // 检查格式是否符合预期
+            if (responseData && responseData.plan) {
+                const planData = responseData.plan;
+                
+                // 处理每日行程，适配新格式（包含morning/noon/evening）
+                const processedDailyPlan = planData.dailyPlan.map(day => {
+                    // 构建活动描述，优先使用分时段格式
+                    let activities = '';
+                    let fullDescription = '';
+                    
+                    if (day.morning || day.noon || day.evening) {
+                        // 使用新的分时段格式
+                        activities = '全天行程';
+                        
+                        // 构建详细描述，包含早中晚
+                        fullDescription = '';
+                        if (day.morning) {
+                            fullDescription += `<strong>早上：</strong>${day.morning}<br>`;
+                        }
+                        if (day.noon) {
+                            fullDescription += `<strong>中午：</strong>${day.noon}<br>`;
+                        }
+                        if (day.evening) {
+                            fullDescription += `<strong>晚上：</strong>${day.evening}<br>`;
+                        }
+                        if (day.description) {
+                            fullDescription += `<br>${day.description}`;
+                        }
+                    } else if (day.activities) {
+                        // 兼容旧格式
+                        activities = day.activities;
+                        fullDescription = day.description || '';
+                    } else {
+                        // 默认格式
+                        activities = `第${day.day}天行程`;
+                        fullDescription = day.description || '探索当地景点和文化';
+                    }
+                    
+                    return {
+                        day: day.day,
+                        activities: activities,
+                        location: day.location || planData.destination,
+                        description: fullDescription,
+                        budget: day.budget || '根据个人消费习惯',
+                        // 保存原始的分时段数据以便在详细视图中使用
+                        morning: day.morning || '',
+                        noon: day.noon || '',
+                        evening: day.evening || ''
+                    };
+                });
+                
+                return {
+                    destination: planData.destination,
+                    overview: planData.overview,
+                    highlights: planData.uniqueFeatures || [],
+                    duration: planData.duration,
+                    dailyPlan: processedDailyPlan,
+                    food: planData.food || '当地特色美食',
+                    transportation: planData.transportation || '公共交通和步行',
+                    accommodation: planData.accommodation || '适合您预算的舒适住宿',
+                    culture: '体验当地文化和传统'
+                };
+            }
+        } catch (jsonError) {
+            console.log('非标准JSON格式，尝试提取JSON部分:', jsonError);
+            
+            // 尝试从文本中提取JSON部分
         const jsonMatch = response.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-            const jsonString = jsonMatch[0];
             try {
-                const jsonData = JSON.parse(jsonString);
-                // Check if the response has the new format with "plan" property
-                if (jsonData.plan) {
-                    // Convert the new format to the expected format
-                    console.log("检测到新格式JSON，进行转换", jsonData.plan);
+                    responseData = JSON.parse(jsonMatch[0]);
+                    console.log('从文本中提取的JSON数据:', responseData);
+                    
+                    if (responseData && responseData.plan) {
+                        const planData = responseData.plan;
+                        
+                        // 处理每日行程，适配新格式（包含morning/noon/evening）
+                        const processedDailyPlan = planData.dailyPlan.map(day => {
+                            // 构建活动描述，优先使用分时段格式
+                            let activities = '';
+                            let fullDescription = '';
+                            
+                            if (day.morning || day.noon || day.evening) {
+                                // 使用新的分时段格式
+                                activities = '全天行程';
+                                
+                                // 构建详细描述，包含早中晚
+                                fullDescription = '';
+                                if (day.morning) {
+                                    fullDescription += `<strong>早上：</strong>${day.morning}<br>`;
+                                }
+                                if (day.noon) {
+                                    fullDescription += `<strong>中午：</strong>${day.noon}<br>`;
+                                }
+                                if (day.evening) {
+                                    fullDescription += `<strong>晚上：</strong>${day.evening}<br>`;
+                                }
+                                if (day.description) {
+                                    fullDescription += `<br>${day.description}`;
+                                }
+                            } else if (day.activities) {
+                                // 兼容旧格式
+                                activities = day.activities;
+                                fullDescription = day.description || '';
+                            } else {
+                                // 默认格式
+                                activities = `第${day.day}天行程`;
+                                fullDescription = day.description || '探索当地景点和文化';
+                            }
+                            
+                            return {
+                                day: day.day,
+                                activities: activities,
+                                location: day.location || planData.destination,
+                                description: fullDescription,
+                                budget: day.budget || '根据个人消费习惯',
+                                // 保存原始的分时段数据以便在详细视图中使用
+                                morning: day.morning || '',
+                                noon: day.noon || '',
+                                evening: day.evening || ''
+                            };
+                        });
+                    
                     return {
-                        destination: jsonData.plan.destination,
-                        overview: jsonData.plan.overview,
-                        highlights: jsonData.plan.uniqueFeatures || [],
-                        duration: jsonData.plan.duration,
-                        dailyPlan: jsonData.plan.dailyPlan.map(day => ({
-                            day: day.day,
-                            activity: day.activities,
-                            location: day.location,
-                            description: day.description,
-                            budget: day.budget
-                        })),
-                        food: jsonData.plan.food,
-                        transportation: jsonData.plan.transportation,
-                        accommodation: jsonData.plan.accommodation,
-                        culture: "体验当地文化和传统"
+                            destination: planData.destination,
+                            overview: planData.overview,
+                            highlights: planData.uniqueFeatures || [],
+                            duration: planData.duration,
+                            dailyPlan: processedDailyPlan,
+                            food: planData.food || '当地特色美食',
+                            transportation: planData.transportation || '公共交通和步行',
+                            accommodation: planData.accommodation || '适合您预算的舒适住宿',
+                            culture: '体验当地文化和传统'
                     };
                 }
-                console.log("检测到旧格式JSON", jsonData);
-                return jsonData;
-            } catch (jsonError) {
-                console.error('解析JSON时出错:', jsonError);
-            }
-        }
-        
-        // If no valid JSON, create structured data from the text
-        console.log("未检测到有效JSON，尝试从文本解析数据");
-        const lines = response.split('\n');
-        let destination = '';
-        let overview = '';
-        let highlights = [];
-        let dailyPlan = [];
-        
-        // Try to extract information from text format
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (line.startsWith('目的地') || line.includes('推荐目的地')) {
-                destination = line.split('：')[1] || line.split(':')[1] || '';
-            } else if (line.includes('概述') || line.includes('简介')) {
-                overview = lines[i+1] || '';
-            } else if (line.includes('亮点') || line.includes('特色')) {
-                let j = i + 1;
-                while (j < lines.length && lines[j].trim().startsWith('-')) {
-                    highlights.push(lines[j].trim().substring(1).trim());
-                    j++;
+                } catch (extractError) {
+                    console.log('提取JSON部分失败，将使用文本解析:', extractError);
                 }
-            } else if (line.match(/第\s*\d+\s*天/) || line.match(/Day\s*\d+/i)) {
-                const dayMatch = line.match(/\d+/);
-                const day = dayMatch ? parseInt(dayMatch[0]) : dailyPlan.length + 1;
-                let description = '';
-                let j = i + 1;
-                while (j < lines.length && !lines[j].match(/第\s*\d+\s*天/) && !lines[j].match(/Day\s*\d+/i)) {
-                    description += lines[j] + ' ';
-                    j++;
-                }
-                
-                dailyPlan.push({
-                    day,
-                    activity: `第${day}天行程`,
-                    location: destination,
-                    description: description.trim()
-                });
             }
         }
-        
-        // Create a fallback structure if parsing fails
-        if (!destination) destination = "根据您的偏好推荐的目的地";
-        if (highlights.length === 0) highlights = ["当地文化", "美食体验", "自然风光"];
-        if (dailyPlan.length === 0) {
-            // Create basic daily plan based on answers duration
-            const durationText = answers[6];
-            let days = 3; // default
-            
-            if (durationText.includes('周末')) days = 3;
-            else if (durationText.includes('一周')) days = 7;
-            else if (durationText.includes('两周')) days = 14;
-            else if (durationText.includes('一个月')) days = 30;
-            
-            for (let i = 1; i <= Math.min(days, 7); i++) {
-                dailyPlan.push({
-                    day: i,
-                    activity: `第${i}天行程`,
-                    location: destination,
-                    description: `探索${destination}的第${i}天`
-                });
-            }
-        }
-        
-        const result = {
-            destination,
-            overview,
-            highlights,
-            duration: dailyPlan.length,
-            dailyPlan,
-            food: "当地特色美食",
-            transportation: "公共交通和步行",
-            accommodation: "适合您预算的舒适住宿",
-            culture: "体验当地文化和传统"
-        };
-        
-        console.log("从文本构建数据结构:", result);
-        return result;
     } catch (error) {
         console.error('解析AI响应时出错:', error);
         return getFallbackTravelGuide();
@@ -1176,81 +1665,171 @@ function saveTravelGuide(travelGuideData, title, notes) {
 
 // 将选项值转换为文本描述
 function getTextForValue(questionId, value) {
-    const descriptions = {
-        1: { // 旅行地点范围
-            domestic: "国内",
-            asia: "亚洲",
-            europe: "欧洲",
-            america: "美洲"
-        },
-        2: { // 地理特征
-            beach: "海滩",
-            mountain: "山脉",
-            city: "城市",
-            countryside: "乡村"
-        },
-        3: { // 气候类型
-            tropical: "热带气候",
-            temperate: "温带气候",
-            cold: "寒冷气候",
-            any: "不限气候"
-        },
-        4: { // 城市规模
-            metropolis: "大都市",
-            midsize: "中等城市",
-            town: "小镇",
-            rural: "乡村地区"
-        },
-        5: { // 旅行风格
-            adventure: "冒险体验",
-            cultural: "文化探索",
-            relaxation: "放松休闲",
-            foodie: "美食之旅"
-        },
-        6: { // 旅行时长
-            weekend: "周末短途 (2-3天)",
-            week: "一周左右 (5-7天)",
-            twoweeks: "两周左右 (10-14天)",
-            month: "长期旅行 (30天以上)"
-        },
-        7: { // 预算水平
-            budget: "经济实惠",
-            moderate: "中等预算",
-            luxury: "豪华体验",
-            unlimited: "不限预算"
-        },
-        8: { // 旅伴
-            solo: "独自旅行",
-            couple: "情侣出游",
-            friends: "朋友结伴",
-            family: "家庭旅行"
-        }
-    };
+    // 如果值是特定目的地标记，返回空字符串（将在prompt中单独处理）
+    if (value === 'specific_destination') {
+        return '用户已指定目的地';
+    }
     
-    return descriptions[questionId]?.[value] || "未指定";
+    switch (questionId) {
+        // 旅行地点范围
+        case '1':
+            switch (value) {
+                case 'domestic': return '国内';
+                case 'asia': return '亚洲';
+                case 'europe': return '欧洲';
+                case 'america': return '美洲';
+                default: return '不限';
+            }
+        // 地理特征
+        case '2':
+            switch (value) {
+                case 'beach': return '海滩';
+                case 'mountain': return '山脉';
+                case 'city': return '城市';
+                case 'countryside': return '乡村';
+                default: return '不限';
+            }
+        // 气候类型
+        case '3':
+            switch (value) {
+                case 'tropical': return '热带';
+                case 'temperate': return '温带';
+                case 'cold': return '寒冷';
+                case 'any': return '不限';
+                default: return '不限';
+            }
+        // 城市规模
+        case '4':
+            switch (value) {
+                case 'metropolis': return '大都市';
+                case 'midsize': return '中等城市';
+                case 'town': return '小镇';
+                case 'rural': return '乡村地区';
+                default: return '不限';
+            }
+        // 旅行风格
+        case '5':
+            switch (value) {
+                case 'adventure': return '冒险体验';
+                case 'cultural': return '文化探索';
+                case 'relaxation': return '放松休闲';
+                case 'foodie': return '美食之旅';
+                default: return '不限';
+            }
+        // 旅行时长
+        case '6':
+            switch (value) {
+                case 'weekend': return '周末短途 (2-3天)';
+                case 'week': return '一周左右 (5-7天)';
+                case 'twoweeks': return '两周左右 (10-14天)';
+                case 'month': return '长期旅行 (30天以上)';
+                default: return '不限';
+            }
+        // 预算水平
+        case '7':
+            switch (value) {
+                case 'budget': return '经济实惠';
+                case 'moderate': return '中等预算';
+                case 'luxury': return '豪华体验';
+                case 'unlimited': return '不限预算';
+                default: return '不限';
+            }
+        // 旅伴
+        case '8':
+            switch (value) {
+                case 'solo': return '独自旅行';
+                case 'couple': return '情侣出游';
+                case 'friends': return '朋友结伴';
+                case 'family': return '家庭旅行';
+                default: return '不限';
+            }
+        default: return '未指定';
+    }
 }
 
 // 获取备用旅行攻略数据
 function getFallbackTravelGuide() {
+    // 检查是否有未确定目的地的请求
+    const needsRecommendation = window.answers && (window.answers.isUncertainDestination || window.answers.needsDestinationRecommendation);
+    
+    let destination = "京都，日本";
+    let overview = "京都是日本传统文化的中心，拥有众多寺庙、神社和历史遗迹。这座城市完美地融合了传统与现代，提供了丰富的文化体验、美食和自然风景。";
+    
+    // 根据用户选择的地区选择不同的备用目的地
+    if (window.answers) {
+        if (window.answers[1] === 'domestic') {
+            destination = "丽江，云南";
+            overview = "丽江是中国云南省的一座历史文化名城，以其独特的纳西族文化和壮丽的自然风光而闻名。古城区是联合国教科文组织世界文化遗产，拥有保存完好的古建筑和水道系统。";
+        } else if (window.answers[1] === 'europe') {
+            destination = "巴塞罗那，西班牙";
+            overview = "巴塞罗那是西班牙加泰罗尼亚地区的首府，以其独特的建筑、艺术氛围和海滨风光而闻名。这座城市融合了现代与传统，高迪的建筑作品为城市增添了不可思议的魅力。";
+        } else if (window.answers[1] === 'america') {
+            destination = "旧金山，美国";
+            overview = "旧金山是美国加利福尼亚州的一座风景如画的城市，以其起伏的山丘、维多利亚式房屋、缆车和金门大桥而闻名。这座城市拥有丰富的文化多样性、创新精神和绝佳的美食体验。";
+        }
+        
+        if (window.answers.specifiedDestination) {
+            destination = window.answers.specifiedDestination;
+            overview = `${destination}是一个令人难忘的旅行目的地，我们为您定制了完美的旅行计划，让您充分体验当地的文化、美食和风景。`;
+        }
+    }
+    
+    // 根据用户选择的旅行时长决定行程天数
+    let duration = 5;
+    if (window.answers && window.answers[6]) {
+        if (window.answers[6] === 'weekend') duration = 3;
+        else if (window.answers[6] === 'week') duration = 7;
+        else if (window.answers[6] === 'twoweeks') duration = 10;
+        else if (window.answers[6] === 'month') duration = 14;
+    }
+    
+    // 创建每日行程计划
+    const dailyPlan = [];
+    for (let i = 1; i <= duration; i++) {
+        dailyPlan.push({
+            day: i,
+            activities: `第${i}天精彩行程`,
+            location: destination,
+            description: `第${i}天将在${destination}的精彩景点中度过，体验当地文化与风景。`,
+            budget: "约¥500-800",
+            // 添加早中晚行程
+            morning: `早上参观${destination}的著名景点，体验早晨的宁静氛围。`,
+            noon: `午餐品尝当地特色美食，然后参观博物馆或文化场所。`,
+            evening: `晚上欣赏${destination}的夜景，享用美味晚餐，感受当地夜生活。`
+        });
+    }
+    
+    // 根据旅行风格调整亮点
+    let highlights = [
+        "探索历史文化景点",
+        "品尝当地特色美食",
+        "体验传统文化活动",
+        "观赏自然风光"
+    ];
+    
+    if (window.answers && window.answers[5]) {
+        if (window.answers[5] === 'adventure') {
+            highlights = ["刺激的户外活动", "自然探险体验", "独特的冒险路线", "当地特色体验"];
+        } else if (window.answers[5] === 'cultural') {
+            highlights = ["历史文化遗迹", "博物馆和艺术馆", "传统工艺体验", "当地文化活动"];
+        } else if (window.answers[5] === 'relaxation') {
+            highlights = ["舒适的度假体验", "轻松的休闲活动", "放松身心的景点", "悠闲的城市漫步"];
+        } else if (window.answers[5] === 'foodie') {
+            highlights = ["当地特色美食", "美食市场和夜市", "烹饪课程体验", "知名餐厅品尝"];
+        }
+    }
+    
     return {
-        destination: "京都，日本",
-        duration: "7天",
-        season: "秋季",
-        highlights: [
-            "伏见稻荷大社",
-            "岚山竹林",
-            "金阁寺",
-            "祗园区"
-        ],
-        dailyPlan: [
-            { day: 1, activity: "抵达并安顿", location: "京都站" },
-            { day: 2, activity: "寺庙之旅", location: "东京都" },
-            { day: 3, activity: "文化探索", location: "祗园和市中心" },
-            { day: 4, activity: "自然之日", location: "岚山" },
-            { day: 5, activity: "历史探索", location: "北京都" },
-            { day: 6, activity: "美食之旅", location: "锦市场及周边" },
-            { day: 7, activity: "最终观光和离开", location: "南京都" }
-        ]
+        destination: destination,
+        overview: overview,
+        highlights: highlights,
+        duration: String(duration),
+        dailyPlan: dailyPlan,
+        food: "当地特色美食，包括传统小吃、季节性菜肴和知名餐厅",
+        transportation: "公共交通、步行和短途出租车相结合，方便且经济实惠",
+        accommodation: "位置便利的舒适酒店或特色民宿，提供良好的休息环境",
+        culture: "体验当地丰富的文化传统，包括历史遗迹、艺术表演和节庆活动",
+        notes: "这是一个自动生成的备用旅行攻略，可根据实际情况进行调整"
     };
 }
 
@@ -1269,11 +1848,23 @@ function initExplorePage() {
         { id: 7, name: 'Rome', region: 'Europe' },
         { id: 8, name: 'London', region: 'Europe' },
         { id: 9, name: 'Bangkok', region: 'Asia' },
-        { id: 10, name: 'Los Angeles', region: 'North America' }
+        { id: 10, name: 'Los Angeles', region: 'North America' },
+        { id: 11, name: 'Mumbai', region: 'Asia' },
+        { id: 12, name: 'Moscow', region: 'Europe' },
+        { id: 13, name: 'Cape Town', region: 'Africa' },
+        { id: 14, name: 'Seoul', region: 'Asia' },
+        { id: 15, name: 'São Paulo', region: 'South America' },
+        { id: 16, name: 'Dubai', region: 'Asia' },
+        { id: 17, name: 'Toronto', region: 'North America' },
+        { id: 18, name: 'Shanghai', region: 'Asia' },
+        { id: 19, name: 'McMurdo Station', region: 'Antarctica' }
     ];
     
     // 记录当前选择的目的地
     let currentDestination = null;
+    
+    // 初始化地图缩放和平移功能
+    initMapZoom();
     
     // 为地图点添加点击事件
     const mapPoints = document.querySelectorAll('.map-point');
@@ -1291,11 +1882,11 @@ function initExplorePage() {
                     const destinationId = parseInt(this.dataset.id);
                     const destination = destinations.find(d => d.id === destinationId);
                     
-                    if (destination) {
+            if (destination) {
                         console.log('Found destination:', destination);
                         currentDestination = destination;
                         showDestinationDetails(destination);
-                    } else {
+            } else {
                         console.error('No destination found with ID:', destinationId);
                     }
                 } catch (error) {
@@ -1381,7 +1972,226 @@ function initExplorePage() {
         });
     }
     
+    // 初始化区域筛选功能
+    initRegionFilter(destinations);
+    
     console.log('=== Explore page 初始化完成 ===');
+}
+
+// 初始化地图缩放和平移功能
+function initMapZoom() {
+    const worldMap = document.querySelector('.world-map');
+    const mapContainer = document.querySelector('.world-map-container');
+    const zoomInBtn = document.querySelector('.map-zoom-in');
+    const zoomOutBtn = document.querySelector('.map-zoom-out');
+    const resetBtn = document.querySelector('.map-reset');
+    
+    if (!worldMap || !mapContainer || !zoomInBtn || !zoomOutBtn || !resetBtn) {
+        console.error('Map zoom elements not found');
+        return;
+    }
+    
+    // 缩放状态变量
+    let scale = 1;
+    let translateX = 0;
+    let translateY = 0;
+    let isDragging = false;
+    let startX, startY;
+    let currentX, currentY;
+    const maxScale = 3;
+    const minScale = 0.8;
+    const scaleStep = 0.2;
+    
+    // 缩放步长变量
+    const zoomSpeeds = {
+        0.8: 50,   // 缩小视图状态下，移动较大距离
+        1: 40,     // 默认视图状态
+        1.2: 35,
+        1.4: 30,
+        1.6: 25,
+        1.8: 20,
+        2: 15,
+        2.2: 12,
+        2.4: 10,
+        2.6: 8,
+        2.8: 6,
+        3: 5      // 最大缩放状态下，移动很小距离
+    };
+    
+    // 应用变换
+    function applyTransform() {
+        worldMap.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
+    }
+    
+    // 放大按钮点击事件
+    zoomInBtn.addEventListener('click', function() {
+        if (scale < maxScale) {
+            scale += scaleStep;
+            applyTransform();
+        }
+    });
+    
+    // 缩小按钮点击事件
+    zoomOutBtn.addEventListener('click', function() {
+        if (scale > minScale) {
+            scale -= scaleStep;
+            translateX = translateX / (scale + scaleStep) * scale;
+            translateY = translateY / (scale + scaleStep) * scale;
+            applyTransform();
+        }
+    });
+    
+    // 重置按钮点击事件
+    resetBtn.addEventListener('click', function() {
+        scale = 1;
+        translateX = 0;
+        translateY = 0;
+        applyTransform();
+    });
+    
+    // 鼠标滚轮缩放事件
+    worldMap.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        
+        // 计算鼠标在地图上的位置（相对于地图原点）
+        const rect = worldMap.getBoundingClientRect();
+        const mouseX = (e.clientX - rect.left) / scale;
+        const mouseY = (e.clientY - rect.top) / scale;
+        
+        // 降低滚轮缩放敏感度
+        const wheelScaleStep = scaleStep * 0.5; // 滚轮缩放步长为按钮的一半
+        
+        // 根据滚轮方向确定缩放操作
+        if (e.deltaY < 0 && scale < maxScale) {
+            // 放大
+            scale += wheelScaleStep;
+        } else if (e.deltaY > 0 && scale > minScale) {
+            // 缩小
+            scale -= wheelScaleStep;
+        } else {
+            return; // 超出缩放范围，不执行
+        }
+        
+        // 调整平移值，保持鼠标位置相对于地图内容的不变
+        const newMouseX = (e.clientX - rect.left) / scale;
+        const newMouseY = (e.clientY - rect.top) / scale;
+        
+        translateX += (newMouseX - mouseX) * scale;
+        translateY += (newMouseY - mouseY) * scale;
+        
+        applyTransform();
+    });
+    
+    // 添加拖动功能
+    worldMap.addEventListener('mousedown', function(e) {
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        currentX = translateX;
+        currentY = translateY;
+        worldMap.style.cursor = 'grabbing';
+    });
+    
+    window.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        
+        // 获取当前缩放级别的移动速度
+        const moveSpeed = zoomSpeeds[scale.toFixed(1)] || zoomSpeeds[Math.round(scale)];
+        
+        // 计算移动距离，根据缩放等级调整移动速度
+        const dx = (e.clientX - startX) / moveSpeed;
+        const dy = (e.clientY - startY) / moveSpeed;
+        
+        translateX = currentX + dx;
+        translateY = currentY + dy;
+        
+        applyTransform();
+    });
+    
+    window.addEventListener('mouseup', function() {
+        isDragging = false;
+        worldMap.style.cursor = 'grab';
+    });
+    
+    // 阻止默认的拖动行为
+    worldMap.addEventListener('dragstart', function(e) {
+        e.preventDefault();
+    });
+    
+    // 初始设置grab光标
+    worldMap.style.cursor = 'grab';
+    
+    // 添加触摸支持
+    worldMap.addEventListener('touchstart', function(e) {
+        if (e.touches.length === 1) {
+            // 单指拖动
+            isDragging = true;
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            currentX = translateX;
+            currentY = translateY;
+        }
+        // 阻止页面滚动
+        e.preventDefault();
+    });
+    
+    worldMap.addEventListener('touchmove', function(e) {
+        if (isDragging && e.touches.length === 1) {
+            // 获取当前缩放级别的移动速度
+            const moveSpeed = zoomSpeeds[scale.toFixed(1)] || zoomSpeeds[Math.round(scale)];
+            
+            // 计算移动距离
+            const dx = (e.touches[0].clientX - startX) / moveSpeed;
+            const dy = (e.touches[0].clientY - startY) / moveSpeed;
+            
+            translateX = currentX + dx;
+            translateY = currentY + dy;
+            
+            applyTransform();
+        }
+        // 阻止页面滚动
+        e.preventDefault();
+    });
+    
+    worldMap.addEventListener('touchend', function() {
+        isDragging = false;
+    });
+}
+
+// 初始化区域筛选功能
+function initRegionFilter(destinations) {
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    const mapPoints = document.querySelectorAll('.map-point');
+    
+    // 创建ID到区域的映射
+    const idToRegionMap = {};
+    destinations.forEach(dest => {
+        idToRegionMap[dest.id] = dest.region;
+    });
+    
+    // 添加点击事件到过滤按钮
+    filterButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            // 移除所有按钮的active类
+            filterButtons.forEach(b => b.classList.remove('active'));
+            // 添加active类到当前按钮
+            this.classList.add('active');
+            
+            const selectedRegion = this.dataset.region;
+            
+            // 根据选择的区域显示或隐藏地图点
+            mapPoints.forEach(point => {
+                const pointId = parseInt(point.dataset.id);
+                const pointRegion = idToRegionMap[pointId];
+                
+                if (selectedRegion === 'all' || pointRegion === selectedRegion) {
+                    point.style.display = 'block';
+                } else {
+                    point.style.display = 'none';
+                }
+            });
+        });
+    });
 }
 
 // 显示官方旅行攻略
@@ -1894,7 +2704,67 @@ function initPlansPage() {
     console.log('Plans page initialized');
     
     // Get saved travel guides from localStorage
-    const savedGuides = JSON.parse(localStorage.getItem('savedGuides')) || [];
+    let savedGuides = JSON.parse(localStorage.getItem('savedGuides')) || [];
+    
+    // Check if savedGuides is empty or not an array
+    if (!Array.isArray(savedGuides) || savedGuides.length === 0) {
+        console.log('No saved guides found or data corrupted. Initializing with default guides.');
+        
+        // Create default guides
+        savedGuides = [
+            {
+                id: 1001,
+                createdAt: new Date().toISOString(),
+                title: "京都之旅",
+                destination: "京都，日本",
+                duration: "7天",
+                season: "秋季",
+                overview: "体验传统日本文化的完美之旅",
+                highlights: [
+                    "伏见稻荷大社",
+                    "岚山竹林",
+                    "金阁寺",
+                    "祗园区"
+                ],
+                dailyPlan: [
+                    { day: 1, activity: "抵达并安顿", location: "京都站" },
+                    { day: 2, activity: "寺庙之旅", location: "东京都" },
+                    { day: 3, activity: "文化探索", location: "祗园和市中心" },
+                    { day: 4, activity: "自然之日", location: "岚山" },
+                    { day: 5, activity: "历史探索", location: "北京都" },
+                    { day: 6, activity: "美食之旅", location: "锦市场及周边" },
+                    { day: 7, activity: "最终观光和离开", location: "南京都" }
+                ],
+                notes: "这是一个自动创建的默认旅行计划"
+            },
+            {
+                id: 1002,
+                createdAt: new Date().toISOString(),
+                title: "巴黎之旅",
+                destination: "巴黎，法国",
+                duration: "5天",
+                season: "春季",
+                overview: "浪漫之都的艺术与美食探索",
+                highlights: [
+                    "埃菲尔铁塔",
+                    "卢浮宫",
+                    "巴黎圣母院",
+                    "蒙马特高地"
+                ],
+                dailyPlan: [
+                    { day: 1, activity: "抵达并游览塞纳河", location: "市中心" },
+                    { day: 2, activity: "艺术之旅", location: "卢浮宫" },
+                    { day: 3, activity: "城市地标", location: "埃菲尔铁塔" },
+                    { day: 4, activity: "历史探索", location: "巴黎圣母院" },
+                    { day: 5, activity: "购物与离开", location: "香榭丽舍大街" }
+                ],
+                notes: "这是一个自动创建的默认旅行计划"
+            }
+        ];
+        
+        // Save to localStorage
+        localStorage.setItem('savedGuides', JSON.stringify(savedGuides));
+    }
     
     // Initialize upcomingPlans array
     let upcomingPlans = [];
@@ -1916,21 +2786,24 @@ function initPlansPage() {
         
         // Create plan object
         upcomingPlans.push({
-            id: guide.id,
+            id: parseInt(guide.id),
             destination: guide.title || destination, // 使用自定义标题或默认目的地
             startDate: startDate.toISOString().split('T')[0],
             endDate: endDate.toISOString().split('T')[0],
             tasks: [
-                { id: guide.id + 1, text: 'Book flight', completed: false },
-                { id: guide.id + 2, text: 'Reserve accommodation', completed: false },
-                { id: guide.id + 3, text: 'Plan daily activities', completed: true },
-                { id: guide.id + 4, text: 'Pack luggage', completed: false }
+                { id: parseInt(guide.id) + 1, text: 'Book flight', completed: false },
+                { id: parseInt(guide.id) + 2, text: 'Reserve accommodation', completed: false },
+                { id: parseInt(guide.id) + 3, text: 'Plan daily activities', completed: true },
+                { id: parseInt(guide.id) + 4, text: 'Pack luggage', completed: false }
             ],
             // Store the full guide data for viewing details
             guideData: guide
         });
     });
     
+    // Always add demo plans if we don't have enough plans yet 
+    // (will only show if there are no savedGuides)
+    if (upcomingPlans.length < 3) {
     // Then add simulated upcoming plans data
     upcomingPlans = upcomingPlans.concat([
         { 
@@ -1957,6 +2830,7 @@ function initPlansPage() {
             ]
         }
     ]);
+    }
     
     // Update total pages
     const totalPages = Math.ceil(upcomingPlans.length / plansPerPage);
@@ -2020,6 +2894,21 @@ function initPlansPage() {
     function populatePlans(page) {
         const plansContainer = document.querySelector('.plans-container');
         if (!plansContainer) return;
+        
+        // Check if we have any plans
+        if (upcomingPlans.length === 0) {
+            // Display empty state
+            plansContainer.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">✈️</div>
+                    <h3>暂无旅行计划</h3>
+                    <p>通过问卷生成或从探索界面收藏的攻略将显示在这里</p>
+                </div>
+            `;
+            // Clear plan details
+            clearPlanDetails();
+            return;
+        }
         
         // Calculate start and end indices
         const startIndex = (page - 1) * plansPerPage;
@@ -2114,12 +3003,12 @@ function initPlansPage() {
                 }
             }
         } else {
-            // No plans to display
+            // No plans to display for this page
             plansContainer.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-icon">✈️</div>
-                    <h3>暂无旅行计划</h3>
-                    <p>通过问卷生成或从探索界面收藏的攻略将显示在这里</p>
+                    <h3>当前页无旅行计划</h3>
+                    <p>请尝试前往其他页面查看更多旅行计划</p>
                 </div>
             `;
             // Clear plan details
@@ -2336,84 +3225,228 @@ function initPlansPage() {
     }
 }
 
-// Show travel guide details in modal
+// Display travel guide details in the modal
 function showTravelGuideDetails(guideData) {
     const modal = document.querySelector('.travel-guide-modal');
     const overlay = document.querySelector('.travel-guide-overlay');
     const container = document.querySelector('.travel-guide-container');
-    const title = document.querySelector('.travel-guide-title');
     
-    if (modal && container) {
-        // 使用自定义标题（如果有）或默认使用目的地名称
-        const displayTitle = guideData.title || `${guideData.destination}旅行攻略`;
-        
-        // 设置标题
-        title.textContent = displayTitle;
-        
-        // 生成HTML用于旅行攻略
-        let guideHTML = `
-            <div class="guide-section guide-destination">
-                <h3>${guideData.destination}</h3>
-                <p>${guideData.overview || ''}</p>
-            </div>`;
-            
-        // 添加用户备注（如果有）
-        if (guideData.notes && guideData.notes.trim().length > 0) {
+    // 如果元素不存在，无法显示
+    if (!modal || !container) {
+        console.error('Travel guide modal elements not found');
+        return;
+    }
+    
+    // 确保guideData有效
+    if (!guideData) {
+        console.error('无效的旅行攻略数据');
+        return;
+    }
+    
+    console.log("显示旅行攻略详情:", guideData);
+    
+    let displayTitle = guideData.title || `${guideData.destination}旅行指南`;
+    let guideHTML = '';
+    
+    // 创建旅游指南标题和目的地信息
             guideHTML += `
-            <div class="guide-section guide-notes">
-                <h4>旅行笔记</h4>
-                <p>${guideData.notes}</p>
-            </div>`;
-        }
-        
-        // 确保highlights是一个数组
-        const highlights = Array.isArray(guideData.highlights) ? guideData.highlights : 
-                         (guideData.uniqueFeatures || ["当地文化", "美食体验", "自然风光"]);
-        
-        // 亮点部分
-        guideHTML += `
+        <div class="travel-guide-journal">
+            <div class="guide-header">
+                <h2 class="guide-title">${displayTitle}</h2>
+                <h3 class="guide-destination">${guideData.destination}</h3>
+            </div>
+            
+            <div class="guide-section guide-overview">
+                <div class="overview-text">
+                    <p>${guideData.overview}</p>
+                </div>
+            </div>
+            
             <div class="guide-section guide-highlights">
-                <h4>行程亮点</h4>
-                <ul>
-        `;
-        
-        highlights.forEach(highlight => {
+                <h4>旅行亮点</h4>
+                <ul class="highlights-list">
+    `;
+    
+    // 添加亮点列表
+    if (guideData.highlights && guideData.highlights.length > 0) {
+        guideData.highlights.forEach(highlight => {
             guideHTML += `<li>${highlight}</li>`;
         });
-        
-        // 每日计划部分
+    } else {
+        // 默认亮点
+        guideHTML += `
+            <li>探索当地文化</li>
+            <li>品尝特色美食</li>
+            <li>游览自然景观</li>
+        `;
+    }
+    
         guideHTML += `
                 </ul>
             </div>
+            
             <div class="guide-section guide-daily-plan">
-                <h4>每日行程</h4>
+                <h4>行程安排 (${guideData.duration}天)</h4>
                 <div class="guide-daily-plan-container">
         `;
         
+    // 每日行程卡片
+    if (guideData.dailyPlan && guideData.dailyPlan.length > 0) {
         guideData.dailyPlan.forEach(day => {
+            // 根据活动类型选择图标
+            let activityIcon = "🧭";
+            
+            // Day activity icons mapping
+        const dayActivityIcons = {
+            "博物馆": "🏛️",
+                "城市": "🏙️",
+                "历史": "🏺",
+            "海滩": "🏖️",
+                "游览": "🚶",
+                "公园": "🌳",
+                "餐厅": "🍽️",
+            "购物": "🛍️",
+                "山": "⛰️",
+                "湖": "🏞️",
+                "徒步": "🥾",
+                "行程": "📝",
+                "旅行": "✈️",
+                "活动": "🎯",
+                "景点": "🏛️",
+                "探索": "🔍",
+                "出发": "🚀",
+                "休息": "☕"
+            };
+            
+            for (const [key, icon] of Object.entries(dayActivityIcons)) {
+                if (day.activities.includes(key)) {
+                    activityIcon = icon;
+                    break;
+                }
+            }
+            
+            // 高级天气标签 - 根据活动推测天气
+            let weatherTag = "";
+            if (day.activities.includes("海滩") || day.activities.includes("游泳")) {
+                weatherTag = `<span class="weather-tag">☀️ 晴天</span>`;
+            } else if (day.activities.includes("博物馆") || day.activities.includes("室内")) {
+                weatherTag = `<span class="weather-tag">🏙️ 休闲</span>`;
+            } else if (day.activities.includes("公园") || day.activities.includes("远足")) {
+                weatherTag = `<span class="weather-tag">🌤️ 舒适</span>`;
+            }
+            
+            // 检查是否有分时段的行程安排
+            const hasDayParts = day.morning || day.noon || day.evening;
+            let dayActivitiesHTML = '';
+            
+            if (hasDayParts) {
+                // 分时段显示行程
+                dayActivitiesHTML = `
+                    <div class="day-activities-timeline">
+                        ${day.morning ? `
+                        <div class="timeline-item">
+                            <div class="timeline-time">🌅 早上</div>
+                            <div class="timeline-content">${day.morning}</div>
+                        </div>` : ''}
+                        
+                        ${day.noon ? `
+                        <div class="timeline-item">
+                            <div class="timeline-time">☀️ 中午</div>
+                            <div class="timeline-content">${day.noon}</div>
+                        </div>` : ''}
+                        
+                        ${day.evening ? `
+                        <div class="timeline-item">
+                            <div class="timeline-time">🌃 晚上</div>
+                            <div class="timeline-content">${day.evening}</div>
+                        </div>` : ''}
+                    </div>
+                `;
+            } else if (day.description) {
+                // 只显示描述
+                dayActivitiesHTML = `<p class="day-description">${day.description}</p>`;
+            }
+            
             guideHTML += `
                 <div class="guide-day-card">
                     <div class="guide-day-number">Day ${day.day}</div>
                     <div class="guide-day-details">
-                        <h5>${day.activities}</h5>
+                        <h5><span class="activity-icon">${activityIcon}</span> ${day.activities}</h5>
                         <p class="day-location">${day.location}</p>
-                        ${day.description ? `<p class="day-description">${day.description}</p>` : ''}
+                        ${dayActivitiesHTML}
+                        ${weatherTag}
                         ${day.budget ? `<p class="day-budget"><strong>预算：</strong>${day.budget}</p>` : ''}
                     </div>
                 </div>
             `;
         });
+    } else {
+        // 默认显示，防止没有日程安排
+        guideHTML += `
+            <div class="guide-day-card">
+                <div class="guide-day-number">Day 1</div>
+                <div class="guide-day-details">
+                    <h5><span class="activity-icon">🧭</span> 探索之旅</h5>
+                    <p class="day-location">${guideData.destination}</p>
+                    <p class="day-description">根据您的旅行偏好，探索${guideData.destination}的精彩景点和体验。</p>
+                </div>
+            </div>
+        `;
+    }
         
-        // 其他信息部分
+        // 其他信息部分 - 添加更好的分类和图标
         guideHTML += `
                 </div>
             </div>
             <div class="guide-section guide-notes">
                 <h4>旅行信息</h4>
-                <p><strong>美食推荐：</strong> ${guideData.food}</p>
-                <p><strong>交通：</strong> ${guideData.transportation}</p>
-                <p><strong>住宿：</strong> ${guideData.accommodation}</p>
-                ${guideData.culture ? `<p><strong>文化体验：</strong> ${guideData.culture}</p>` : ''}
+                <div class="travel-info-grid">
+                    <div class="travel-info-item">
+                        <div class="info-icon">🍽️</div>
+                        <div class="info-content">
+                            <h5>美食推荐</h5>
+                            <p>${guideData.food}</p>
+                        </div>
+                    </div>
+                    <div class="travel-info-item">
+                        <div class="info-icon">🚆</div>
+                        <div class="info-content">
+                            <h5>交通方式</h5>
+                            <p>${guideData.transportation}</p>
+                        </div>
+                    </div>
+                    <div class="travel-info-item">
+                        <div class="info-icon">🏨</div>
+                        <div class="info-content">
+                            <h5>住宿建议</h5>
+                            <p>${guideData.accommodation}</p>
+                        </div>
+                    </div>
+                    ${guideData.culture ? `
+                    <div class="travel-info-item">
+                        <div class="info-icon">🎭</div>
+                        <div class="info-content">
+                            <h5>文化体验</h5>
+                            <p>${guideData.culture}</p>
+                        </div>
+                    </div>` : ''}
+                    ${guideData.bestTime ? `
+                    <div class="travel-info-item">
+                        <div class="info-icon">🗓️</div>
+                        <div class="info-content">
+                            <h5>最佳旅行时间</h5>
+                            <p>${guideData.bestTime}</p>
+                        </div>
+                    </div>` : ''}
+                    ${guideData.tips ? `
+                    <div class="travel-info-item">
+                        <div class="info-icon">💡</div>
+                        <div class="info-content">
+                            <h5>旅行小贴士</h5>
+                            <p>${guideData.tips}</p>
+                        </div>
+                    </div>` : ''}
+                </div>
             </div>
         `;
         
@@ -2421,6 +3454,7 @@ function showTravelGuideDetails(guideData) {
         guideHTML += `
             <div class="travel-guide-save-btn">
                 <button id="save-travel-guide-btn">保存到我的旅行</button>
+                <button id="generate-guide-image-btn">生成攻略图片</button>
             </div>
         `;
         
@@ -2442,6 +3476,14 @@ function showTravelGuideDetails(guideData) {
             });
         }
         
+        // 添加生成图片按钮点击事件
+        const generateImageButton = document.getElementById('generate-guide-image-btn');
+        if (generateImageButton) {
+            generateImageButton.addEventListener('click', function() {
+                generateTravelGuideImage();
+            });
+        }
+        
         // Show modal and overlay
         modal.classList.add('active');
         overlay.classList.add('active');
@@ -2455,8 +3497,203 @@ function showTravelGuideDetails(guideData) {
         // 添加背景点击关闭事件
         if (overlay) {
             overlay.addEventListener('click', closeTravelGuideModal);
-        }
     }
+}
+
+// 生成旅行攻略图片
+function generateTravelGuideImage() {
+    console.log('正在生成旅行攻略图片...');
+    
+    // 显示加载消息
+    showMessage('正在生成攻略图片，请稍候...');
+    
+    // 获取要截图的元素
+    const guideContainer = document.querySelector('.travel-guide-container');
+    
+    if (!guideContainer) {
+        console.error('找不到旅行攻略容器元素');
+        showMessage('生成图片失败，请重试');
+        return;
+    }
+    
+    // 暂时隐藏按钮，以免它们出现在截图中
+    const saveButtonContainer = document.querySelector('.travel-guide-save-btn');
+    let originalDisplay = 'flex';
+    
+    if (saveButtonContainer) {
+        originalDisplay = saveButtonContainer.style.display;
+        saveButtonContainer.style.display = 'none';
+    }
+    
+    // 保存原始样式
+    const originalStyle = {
+        padding: guideContainer.style.padding,
+        borderRadius: guideContainer.style.borderRadius,
+        boxShadow: guideContainer.style.boxShadow,
+        backgroundColor: guideContainer.style.backgroundColor,
+        maxHeight: guideContainer.style.maxHeight,
+        overflow: guideContainer.style.overflow
+    };
+    
+    // 应用适合图片生成的样式
+    guideContainer.style.padding = '30px';
+    guideContainer.style.borderRadius = '0';
+    guideContainer.style.boxShadow = 'none';
+    guideContainer.style.backgroundColor = '#f8f5e9';
+    guideContainer.style.maxHeight = 'none';
+    guideContainer.style.overflow = 'visible';
+    
+    // 添加装饰边框
+    const decorativeBorder = document.createElement('div');
+    decorativeBorder.classList.add('guide-image-border');
+    decorativeBorder.style.position = 'absolute';
+    decorativeBorder.style.top = '0';
+    decorativeBorder.style.left = '0';
+    decorativeBorder.style.width = '100%';
+    decorativeBorder.style.height = '100%';
+    decorativeBorder.style.border = '15px solid #f0e6d2';
+    decorativeBorder.style.boxSizing = 'border-box';
+    decorativeBorder.style.pointerEvents = 'none';
+    decorativeBorder.style.zIndex = '1000';
+    decorativeBorder.style.borderImage = 'linear-gradient(45deg, #f8d56b, #c99f4a, #f8d56b, #c99f4a) 1';
+    guideContainer.appendChild(decorativeBorder);
+    
+    // 添加水印和标志
+    const watermark = document.createElement('div');
+    watermark.classList.add('guide-watermark');
+    watermark.innerHTML = '<div style="display: flex; align-items: center; gap: 10px;"><span style="font-size: 30px;">✈️</span> DeepTrip - 您的专属旅行规划师</div>';
+    watermark.style.position = 'absolute';
+    watermark.style.bottom = '20px';
+    watermark.style.right = '30px';
+    watermark.style.fontFamily = 'Brush Script MT, cursive';
+    watermark.style.color = 'rgba(0, 0, 0, 0.15)';
+    watermark.style.fontSize = '20px';
+    watermark.style.transform = 'rotate(-5deg)';
+    watermark.style.zIndex = '1001';
+    watermark.style.pointerEvents = 'none';
+    watermark.style.whiteSpace = 'nowrap';
+    guideContainer.appendChild(watermark);
+    
+    // 添加QR码装饰元素（如果有需要可以替换为实际的QR码）
+    const qrCode = document.createElement('div');
+    qrCode.classList.add('guide-qr-code');
+    qrCode.style.position = 'absolute';
+    qrCode.style.bottom = '20px';
+    qrCode.style.left = '30px';
+    qrCode.style.width = '60px';
+    qrCode.style.height = '60px';
+    qrCode.style.backgroundColor = 'rgba(0, 0, 0, 0.1)';
+    qrCode.style.backgroundImage = 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Crect width=\'20\' height=\'20\' x=\'5\' y=\'5\' fill=\'%23333\'/%3E%3Crect width=\'20\' height=\'20\' x=\'35\' y=\'5\' fill=\'%23333\'/%3E%3Crect width=\'20\' height=\'20\' x=\'5\' y=\'35\' fill=\'%23333\'/%3E%3Crect width=\'10\' height=\'10\' x=\'10\' y=\'10\' fill=\'white\'/%3E%3Crect width=\'10\' height=\'10\' x=\'40\' y=\'10\' fill=\'white\'/%3E%3Crect width=\'10\' height=\'10\' x=\'10\' y=\'40\' fill=\'white\'/%3E%3C/svg%3E")';
+    qrCode.style.backgroundSize = 'contain';
+    qrCode.style.zIndex = '1001';
+    qrCode.style.opacity = '0.7';
+    qrCode.style.pointerEvents = 'none';
+    guideContainer.appendChild(qrCode);
+    
+    // 使用html2canvas生成截图
+    html2canvas(guideContainer, {
+        scale: 2, // 提高分辨率
+        useCORS: true, // 允许加载跨域图片
+        backgroundColor: '#f8f5e9', // 背景色
+        logging: false, // 关闭日志
+        allowTaint: true, // 允许污染画布
+        letterRendering: true, // 提高文字渲染质量
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: document.documentElement.offsetWidth,
+        windowHeight: document.documentElement.offsetHeight
+    }).then(canvas => {
+        // 完成截图后恢复按钮显示
+        if (saveButtonContainer) {
+            saveButtonContainer.style.display = originalDisplay;
+        }
+        
+        // 恢复原始样式
+        guideContainer.style.padding = originalStyle.padding;
+        guideContainer.style.borderRadius = originalStyle.borderRadius;
+        guideContainer.style.boxShadow = originalStyle.boxShadow;
+        guideContainer.style.backgroundColor = originalStyle.backgroundColor;
+        guideContainer.style.maxHeight = originalStyle.maxHeight;
+        guideContainer.style.overflow = originalStyle.overflow;
+        
+        // 移除添加的装饰元素
+        if (guideContainer.contains(decorativeBorder)) {
+            guideContainer.removeChild(decorativeBorder);
+        }
+        if (guideContainer.contains(watermark)) {
+            guideContainer.removeChild(watermark);
+        }
+        if (guideContainer.contains(qrCode)) {
+            guideContainer.removeChild(qrCode);
+        }
+        
+        // 将canvas转换为URL
+        const imageUrl = canvas.toDataURL('image/png');
+        
+        // 获取旅行指南标题作为文件名
+        let fileName = '我的旅行攻略';
+        const titleElement = document.querySelector('.guide-title');
+        if (titleElement && titleElement.textContent) {
+            fileName = titleElement.textContent.replace(/[^\w\s\u4e00-\u9fa5]/g, '').trim() || fileName;
+        }
+        
+        // 创建下载链接
+        const downloadLink = document.createElement('a');
+        downloadLink.href = imageUrl;
+        downloadLink.download = `${fileName}.png`;
+        
+        // 添加到DOM，点击，然后移除
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        
+        // 显示成功消息
+        showMessage('攻略图片已生成，正在下载...');
+    }).catch(error => {
+        console.error('生成攻略图片时出错:', error);
+        showMessage('生成图片失败，请重试');
+        
+        // 出错时恢复按钮显示并移除装饰元素
+        if (saveButtonContainer) {
+            saveButtonContainer.style.display = originalDisplay;
+        }
+        
+        // 恢复原始样式
+        guideContainer.style.padding = originalStyle.padding;
+        guideContainer.style.borderRadius = originalStyle.borderRadius;
+        guideContainer.style.boxShadow = originalStyle.boxShadow;
+        guideContainer.style.backgroundColor = originalStyle.backgroundColor;
+        guideContainer.style.maxHeight = originalStyle.maxHeight;
+        guideContainer.style.overflow = originalStyle.overflow;
+        
+        // 移除添加的装饰元素
+        if (guideContainer.contains(decorativeBorder)) {
+            guideContainer.removeChild(decorativeBorder);
+        }
+        if (guideContainer.contains(watermark)) {
+            guideContainer.removeChild(watermark);
+        }
+        if (guideContainer.contains(qrCode)) {
+            guideContainer.removeChild(qrCode);
+        }
+    });
+}
+
+// 根据季节推测气候
+function getClimateFromSeason(season) {
+    if (!season) return "四季宜人";
+    
+    if (season.includes("夏") || season.includes("summer")) {
+        return "夏季炎热";
+    } else if (season.includes("冬") || season.includes("winter")) {
+        return "冬季寒冷";
+    } else if (season.includes("春") || season.includes("spring")) {
+        return "春季温暖";
+    } else if (season.includes("秋") || season.includes("fall") || season.includes("autumn")) {
+        return "秋季凉爽";
+    }
+    
+    return "四季宜人";
 }
 
 // Close travel guide modal
@@ -3144,8 +4381,8 @@ function initStarBackground() {
         worldMapContainer.style.backdropFilter = 'none';
     }
     
-    // 添加内联样式到body
-    document.body.style.backgroundColor = 'rgb(20, 30, 48)';
+    // 添加内联样式到body - 使背景颜色更亮一些
+    document.body.style.backgroundColor = 'rgb(40, 50, 70)';
     
     // Create and insert canvas
     let canvas = document.getElementById('star-canvas');
@@ -3173,16 +4410,16 @@ function initStarBackground() {
     let width, height;
     const stars = [];
     const meteors = [];
-    // 优化星星数量，平衡性能和视觉效果
-    const starCount = Math.min(500, Math.floor((window.innerWidth * window.innerHeight) / 1000));
+    // 进一步减少星星数量
+    const starCount = Math.min(20, Math.floor((window.innerWidth * window.innerHeight) / 20000));
     
     console.log('Initializing star background with', starCount, 'stars');
     
-    // 创建不同大小的星星类型
+    // 创建不同大小的星星类型，整体更小更暗
     const starTypes = [
-        { minRadius: 0.3, maxRadius: 0.8, count: Math.floor(starCount * 0.7), alpha: 0.6 }, // 小星星
-        { minRadius: 0.8, maxRadius: 1.5, count: Math.floor(starCount * 0.25), alpha: 0.8 }, // 中等星星
-        { minRadius: 1.5, maxRadius: 2.2, count: Math.floor(starCount * 0.05), alpha: 1.0 }  // 大星星
+        { minRadius: 0.1, maxRadius: 0.2, count: Math.floor(starCount * 0.7), alpha: 0.15 }, // 小星星
+        { minRadius: 0.2, maxRadius: 0.3, count: Math.floor(starCount * 0.25), alpha: 0.2 }, // 中等星星
+        { minRadius: 0.3, maxRadius: 0.5, count: Math.floor(starCount * 0.05), alpha: 0.3 }  // 大星星
     ];
     
     // 预先计算一些属性来减少每帧的计算量
@@ -3190,7 +4427,7 @@ function initStarBackground() {
     let targetFPS = 30; // 使用let而不是const，使其可变
     let frameThreshold = 1000 / targetFPS;
     let meteorTimer = 0;
-    const meteorInterval = 3000; // 每3秒一颗流星
+    const meteorInterval = 30000; // 大幅减少流星频率，每30秒一颗流星
     
     // 添加低性能设备检测
     if (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) {
@@ -3212,9 +4449,9 @@ function initStarBackground() {
                     x: Math.random() * width,
                     y: Math.random() * height,
                     radius: Math.random() * (type.maxRadius - type.minRadius) + type.minRadius,
-                    alpha: Math.random() * 0.5 + type.alpha,
-                    delta: (Math.random() * 0.01 + 0.005) * (Math.random() > 0.5 ? 1 : -1),
-                    twinkleSpeed: Math.random() * 0.03 + 0.01
+                    alpha: Math.random() * 0.2 + type.alpha, // 降低整体亮度
+                    delta: (Math.random() * 0.003 + 0.001) * (Math.random() > 0.5 ? 1 : -1), // 减缓闪烁速度
+                    twinkleSpeed: Math.random() * 0.008 + 0.003
                 });
             }
         });
@@ -3223,19 +4460,19 @@ function initStarBackground() {
         drawStaticBackground();
     }
     
-    // 创建一个性能优化的背景层
+    // 创建一个性能优化的背景层，使用更亮的背景使星星不太显眼
     function drawStaticBackground() {
         // 绘制背景渐变
         const gradient = ctx.createLinearGradient(0, 0, 0, height);
-        gradient.addColorStop(0, 'rgb(25, 35, 60)');
-        gradient.addColorStop(1, 'rgb(10, 15, 30)');
+        gradient.addColorStop(0, 'rgb(50, 92, 218)');
+        gradient.addColorStop(1, 'rgb(45, 55, 75)');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
     }
     
     function createMeteor() {
         // 流星总数限制，防止性能问题
-        if (meteors.length >= 5) return;
+        if (meteors.length >= 1) return; // 最多只有1颗流星同时出现
         
         // 从屏幕的随机一侧生成流星
         const side = Math.floor(Math.random() * 2); // 0 - 左侧, 1 - 右侧
@@ -3249,11 +4486,11 @@ function initStarBackground() {
         meteors.push({
             x: startX,
             y: startY,
-            length: Math.random() * 100 + 80, // 更长的流星轨迹
-            speed: Math.random() * 5 + 5, // 更快的速度
+            length: Math.random() * 20 + 15, // 更短的流星轨迹
+            speed: Math.random() * 2 + 1.5, // 降低速度
             angle: angle,
-            alpha: 1,
-            width: Math.random() * 1.5 + 1 // 随机宽度
+            alpha: 0.3, // 大幅降低透明度
+            width: Math.random() * 0.5 + 0.2 // 更细的流星
         });
     }
     
@@ -3285,20 +4522,20 @@ function initStarBackground() {
             // 更自然的闪烁效果
             star.alpha += star.delta * star.twinkleSpeed * (deltaTime / 16.67); // 按照60FPS校准
             
-            if (star.alpha <= 0.1 || star.alpha >= 1) {
+            if (star.alpha <= 0.05 || star.alpha >= 0.4) { // 限制最高亮度
                 star.delta *= -1;
             }
             
             ctx.beginPath();
             ctx.arc(star.x, star.y, star.radius, 0, 2 * Math.PI);
             
-            // 只为大星星添加光晕效果以提高性能
-            if (star.radius > 1.5) {
+            // 只为大星星添加非常微弱的光晕效果
+            if (star.radius > 0.4) {
                 const glow = ctx.createRadialGradient(
                     star.x, star.y, 0,
-                    star.x, star.y, star.radius * 3
+                    star.x, star.y, star.radius * 1.3
                 );
-                glow.addColorStop(0, `rgba(255, 255, 255, ${star.alpha * 0.4})`);
+                glow.addColorStop(0, `rgba(255, 255, 255, ${star.alpha * 0.05})`);
                 glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
                 
                 ctx.fillStyle = glow;
@@ -3317,11 +4554,10 @@ function initStarBackground() {
             ctx.translate(m.x, m.y);
             ctx.rotate(-m.angle);
             
-            // 更漂亮的流星渐变
+            // 更简单的流星渐变
             const grad = ctx.createLinearGradient(0, 0, -m.length, 0);
-            grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-            grad.addColorStop(0.1, 'rgba(255, 255, 255, 0.8)');
-            grad.addColorStop(0.2, 'rgba(200, 220, 255, 0.6)');
+            grad.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
+            grad.addColorStop(0.2, 'rgba(200, 220, 255, 0.15)');
             grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
             
             ctx.strokeStyle = grad;
@@ -3333,8 +4569,8 @@ function initStarBackground() {
             
             // 流星头部添加亮点
             ctx.beginPath();
-            ctx.arc(0, 0, m.width + 1, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255, 255, 255, ' + m.alpha + ')';
+            ctx.arc(0, 0, m.width * 0.8, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, ' + m.alpha * 0.4 + ')';
             ctx.fill();
             
             ctx.restore();
@@ -3343,7 +4579,7 @@ function initStarBackground() {
             const moveDistance = m.speed * (deltaTime / 16.67);
             m.x += Math.cos(m.angle) * moveDistance;
             m.y += Math.sin(m.angle) * moveDistance;
-            m.alpha -= 0.003 * (deltaTime / 16.67);
+            m.alpha -= 0.005 * (deltaTime / 16.67);
             
             // 当流星飞出屏幕或透明度低于0时移除
             if (m.alpha <= 0 || m.x < -m.length || m.x > width + m.length ||
@@ -3363,63 +4599,4 @@ function initStarBackground() {
     
     // 开始动画
     requestAnimationFrame(animateStars);
-}
-
-// Function to animate page turns
-function animatePageTurn(direction) {
-    const journalLeft = document.querySelector('.journal-left');
-    const journalRight = document.querySelector('.journal-right');
-    
-    if (!journalLeft || !journalRight) return;
-    
-    // Add turning page class based on direction
-    if (direction === 'prev') {
-        journalRight.style.transform = 'rotateY(-15deg)';
-        journalRight.style.transformOrigin = 'left center';
-        journalRight.style.zIndex = '5';
-        journalLeft.style.transform = 'rotateY(0deg)';
-        journalLeft.style.zIndex = '1';
-        
-        // Add page turning sound
-        playPageSound();
-        
-        // Reset after animation
-        setTimeout(() => {
-            journalRight.style.transform = '';
-            journalRight.style.zIndex = '';
-        }, 500);
-    } else {
-        journalLeft.style.transform = 'rotateY(15deg)';
-        journalLeft.style.transformOrigin = 'right center';
-        journalLeft.style.zIndex = '5';
-        journalRight.style.transform = 'rotateY(0deg)';
-        journalRight.style.zIndex = '1';
-        
-        // Add page turning sound
-        playPageSound();
-        
-        // Reset after animation
-        setTimeout(() => {
-            journalLeft.style.transform = '';
-            journalLeft.style.zIndex = '';
-        }, 500);
-    }
-}
-
-// Function to play page turning sound
-function playPageSound() {
-    // Create audio element for page turning sound
-    const audio = new Audio();
-    audio.src = 'audio/page-flip.mp3'; // Make sure you have this audio file
-    audio.volume = 0.2;
-    
-    // Try to play the sound (will fail silently if file not found)
-    try {
-        audio.play().catch(e => {
-            console.log('Page sound could not be played:', e);
-            // It's ok if this fails
-        });
-    } catch (e) {
-        // Ignore errors since this is just a nice-to-have
-    }
 }
